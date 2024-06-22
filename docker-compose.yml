@@ -1,0 +1,101 @@
+services:
+    nginx:
+        build:
+            context: ./docker/nginx
+            dockerfile: Dockerfile
+        restart: always
+        volumes:
+            - ./:/var/www/html
+            - ./storage/logs/:/var/log/nginx
+        environment:
+            - "XDG_CONFIG_HOME=/app"
+        ports:
+            - "80:80"
+        depends_on:
+            - php
+        command: [ nginx-debug, '-g', 'daemon off;' ]
+        networks:
+            - net
+    php:
+        build:
+            context: ./docker/php
+            dockerfile: Dockerfile
+        restart: always
+        tty: true
+        environment:
+            #https://serversideup.net/open-source/docker-php/docs/reference/environment-variable-specification
+            - "SSL_MODE=off"
+            - "AUTORUN_ENABLED=true"
+            - "PHP_MEMORY_LIMIT=512M"
+            - "PHP_POST_MAX_SIZE=50M"
+            - "PHP_UPLOAD_MAX_FILE_SIZE=50M"
+            - "PHP_MAX_EXECUTION_TIME=60"
+            - "PHP_DISPLAY_ERRORS=on"
+        volumes:
+            - '.:/var/www/html'
+        depends_on:
+            - mysql
+        networks:
+            - net
+    mysql:
+        image: mysql:8.0
+        restart: always
+        tty: true
+        volumes:
+            - database:/var/lib/mysql
+        environment:
+            - "MYSQL_ROOT_PASSWORD=secret"
+            - "MYSQL_USER=user"
+            - "MYSQL_PASSWORD=secret"
+            - "MYSQL_DATABASE=laravel"
+        ports:
+            - "3306:3306"
+        networks:
+            - net
+    phpmyadmin:
+        image: phpmyadmin
+        container_name: phpmyadmin
+        restart: always
+        environment:
+            - "PMA_HOST=mysql"
+            - "PMA_USER=user"
+            - "PMA_PASSWORD=secret"
+            - "UPLOAD_LIMIT=64M"
+        ports:
+            - 8081:80
+        depends_on:
+            - mysql
+        networks:
+            - net
+    node:
+        image: node:18-alpine
+        restart: always
+        tty: true
+        ports:
+            - "3000:3000"
+        volumes:
+            - ./:/var/www
+        working_dir: /var/www
+        networks:
+            - net
+    redis:
+        image: 'redis:alpine'
+        restart: always
+        ports:
+            - '6379:6379'
+        volumes:
+            - 'redis:/data'
+        healthcheck:
+            test: [ "CMD", "redis-cli", "ping" ]
+            retries: 3
+            timeout: 5s
+        networks:
+            - net
+volumes:
+    database:
+        driver: local
+    redis:
+        driver: local
+networks:
+    net:
+        driver: bridge
